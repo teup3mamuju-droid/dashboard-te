@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Penjualan Listrik</title>
+  <meta name="description" content="Dashboard interaktif Laporan TUL III-09 Penjualan Tenaga Listrik">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%232a78d6' d='M13 2 4 14h7l-1 8 9-12h-7z'/></svg>">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>
+    try { var t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <svg class="bolt" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+        <div>
+          <h1>Penjualan Tenaga Listrik</h1>
+          <p class="sub" id="subtitle">Laporan TUL III-09</p>
+        </div>
+      </div>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Ganti tema terang/gelap" title="Ganti tema">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      </button>
+    </div>
+    <div class="wrap filters" role="group" aria-label="Filter">
+      <label class="field"><span>Level</span><select id="fLevel"></select></label>
+      <label class="field"><span>Unit</span><select id="fUnit"></select></label>
+      <label class="field"><span>Tahun</span><select id="fYear"></select></label>
+      <label class="field"><span>Bulan</span><select id="fMonth"></select></label>
+      <div class="field">
+        <span>Jenis</span>
+        <div class="seg" id="fJenis" role="radiogroup" aria-label="Jenis pelanggan">
+          <button type="button" data-v="TOTAL" aria-pressed="true">Total</button>
+          <button type="button" data-v="NORMAL" aria-pressed="false">Pascabayar</button>
+          <button type="button" data-v="LPB" aria-pressed="false">Prabayar</button>
+        </div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app">
+    <div class="meta" id="meta"></div>
+
+    <section class="kpis" id="kpis" aria-label="Ringkasan"></section>
+
+    <section class="grid">
+      <article class="card span-2">
+        <div class="card-head">
+          <div>
+            <h2>Tren bulanan</h2>
+            <p class="hint" id="trendHint">Klik batang untuk memilih bulan</p>
+          </div>
+          <div class="seg sm" id="tMetric">
+            <button type="button" data-v="kwh" aria-pressed="true">kWh</button>
+            <button type="button" data-v="rp" aria-pressed="false">Rupiah</button>
+            <button type="button" data-v="c" aria-pressed="false">Pelanggan</button>
+            <button type="button" data-v="rpkwhavg" aria-pressed="false">Rp/kWh</button>
+          </div>
+        </div>
+        <div class="chart" id="chTrend" style="height:320px"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2>Komposisi per golongan</h2>
+            <p class="hint">Klik golongan untuk menyaring seluruh dashboard</p>
+          </div>
+          <div class="seg-stack">
+            <div class="seg sm" id="gMetric">
+              <button type="button" data-v="kwh" aria-pressed="true">kWh</button>
+              <button type="button" data-v="rp" aria-pressed="false">Rupiah</button>
+              <button type="button" data-v="c" aria-pressed="false">Pelanggan</button>
+            </div>
+            <div class="seg sm" id="gPeriod">
+              <button type="button" data-v="m" aria-pressed="true">Bulan ini</button>
+              <button type="button" data-v="ytd" aria-pressed="false">s.d. bulan ini</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart" id="chGol" style="height:300px"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2>Pascabayar vs Prabayar</h2>
+            <p class="hint">Porsi bulan terpilih</p>
+          </div>
+        </div>
+        <div class="chart" id="chMix" style="height:300px"></div>
+      </article>
+
+      <article class="card span-2">
+        <div class="card-head">
+          <div>
+            <h2>10 tarif terbesar</h2>
+            <p class="hint" id="topHint">Bulan terpilih</p>
+          </div>
+          <div class="seg sm" id="topMetric">
+            <button type="button" data-v="kwh" aria-pressed="true">kWh</button>
+            <button type="button" data-v="rp" aria-pressed="false">Rupiah</button>
+            <button type="button" data-v="c" aria-pressed="false">Pelanggan</button>
+          </div>
+        </div>
+        <div class="chart" id="chTop" style="height:360px"></div>
+      </article>
+
+      <article class="card span-2">
+        <div class="card-head">
+          <div>
+            <h2>Detail per tarif</h2>
+            <p class="hint">Klik judul kolom untuk mengurutkan · klik baris golongan untuk buka/tutup</p>
+          </div>
+          <div class="tools">
+            <input type="search" id="q" placeholder="Cari tarif…" aria-label="Cari tarif">
+            <label class="check"><input type="checkbox" id="hideZero" checked> Sembunyikan kosong</label>
+            <button type="button" class="btn" id="csvBtn">Unduh CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl"></table>
+        </div>
+      </article>
+    </section>
+
+    <footer class="foot" id="foot"></footer>
+  </main>
+
+  <div class="loading" id="loading">Memuat data…</div>
+
+  <script src="assets/echarts.min.js"></script><!-- Apache ECharts 5.5.1 (Apache-2.0) -->
+  <script src="assets/app.js"></script>
+</body>
+</html>
