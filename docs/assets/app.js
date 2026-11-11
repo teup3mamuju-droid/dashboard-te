@@ -4,7 +4,7 @@
 
   const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   const BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  const LEVEL_NAME = { UP: 'UP3', KABUPATEN: 'Kabupaten', UPI: 'UPI' };
+  const LEVEL_NAME = { UP: 'UP3', UPI: 'ULP', KABUPATEN: 'Kabupaten' };
   const JENIS_NAME = { TOTAL: 'Total', NORMAL: 'Pascabayar', LPB: 'Prabayar' };
   const GOL = {
     S: { name: 'Sosial', c: '--s5' },
@@ -28,7 +28,7 @@
   let DATA, F;
   const S = {
     level: 'UP', unit: null, year: null, ym: null, jenis: 'TOTAL', gol: null,
-    tMetric: 'kwh', gMetric: 'kwh', gPeriod: 'm', topMetric: 'kwh',
+    tMetric: 'kwh', gMetric: 'kwh', gPeriod: 'm', topMetric: 'kwh', cMetric: 'kwh',
     sort: null, closed: new Set(), q: '', hideZero: true,
   };
   const charts = {};
@@ -63,13 +63,16 @@
   const allMonths = () => Object.keys((unitData() || { months: {} }).months).sort();
   const yearMonths = () => allMonths().filter((k) => k.startsWith(S.year + '-'));
   const zero = () => F.names.map(() => 0);
+  const realUnits = (level) => Object.keys(DATA.levels[level] || {}).filter((k) => !DATA.levels[level][k].merged);
+  // apakah unit punya rincian pascabayar/prabayar
+  const hasSplit = (u) => { u = u || unitData(); return !!u && Object.values(u.months).some((m) => m.NORMAL || m.LPB); };
 
-  function rowsFor(ym, jenis) {
-    const u = unitData();
+  function rowsFor(ym, jenis, u) {
+    u = u || unitData();
     const mon = u && u.months[ym];
     const out = {};
     if (!mon) return out;
-    const parts = jenis === 'TOTAL' ? ['NORMAL', 'LPB'] : [jenis];
+    const parts = jenis === 'TOTAL' ? (mon.TOTAL ? ['TOTAL'] : ['NORMAL', 'LPB']) : [jenis];
     for (const t of u.tarif) {
       let acc = null;
       for (const p of parts) {
@@ -82,8 +85,8 @@
     }
     return out;
   }
-  function agg(ym, jenis, gol) {
-    const rows = rowsFor(ym, jenis), s = zero();
+  function agg(ym, jenis, gol, u) {
+    const rows = rowsFor(ym, jenis, u), s = zero();
     for (const [t, r] of Object.entries(rows)) {
       if (gol && t[0] !== gol) continue;
       for (let i = 0; i < r.length; i++) s[i] += r[i];
@@ -94,6 +97,35 @@
     if (m === 'rpkwhavg') return arr[F.kwh] ? arr[F.rp] / arr[F.kwh] : 0;
     return arr[F[m]];
   }
+  // Unit gabungan ("Semua ULP") untuk level yang punya lebih dari satu unit
+  function buildMerged() {
+    for (const level of Object.keys(DATA.levels)) {
+      const lv = DATA.levels[level], names = Object.keys(lv);
+      if (names.length < 2) continue;
+      const m = { merged: true, code: '', parent: '', tarif: [], months: {} };
+      names.forEach((n) => lv[n].tarif.forEach((t) => { if (!m.tarif.includes(t)) m.tarif.push(t); }));
+      const yms = [...new Set(names.flatMap((n) => Object.keys(lv[n].months)))].sort();
+      for (const ym of yms) {
+        if (!names.every((n) => lv[n].months[ym])) continue; // hanya bulan yang lengkap semua unitnya
+        const split = names.every((n) => lv[n].months[ym].NORMAL && lv[n].months[ym].LPB);
+        const mon = { status: {}, source: {} };
+        for (const j of split ? ['NORMAL', 'LPB'] : ['TOTAL']) {
+          const acc = {};
+          for (const n of names) {
+            for (const [t, r] of Object.entries(rowsFor(ym, j, lv[n]))) {
+              acc[t] = acc[t] || zero();
+              r.forEach((v, i) => (acc[t][i] += v));
+            }
+          }
+          mon[j] = acc;
+          mon.status[j] = `gabungan ${names.length} unit`;
+        }
+        m.months[ym] = mon;
+      }
+      lv[`Semua ${LEVEL_NAME[level] || level} (gabungan)`] = m;
+    }
+  }
+
   function ytd(jenis, gol, fn) {
     const s = zero();
     for (const ym of yearMonths()) {
@@ -135,7 +167,7 @@
   }
   function bindSeg(id, key) {
     $(id).addEventListener('click', (e) => {
-      const b = e.target.closest('button'); if (!b) return;
+      const b = e.target.closest('button'); if (!b || b.disabled) return;
       S[key] = b.dataset.v; setSeg(id, S[key]); render();
     });
   }
@@ -148,9 +180,16 @@
       const n = Object.keys(DATA.levels[l]).length;
       return { v: l, t: LEVEL_NAME[l] + (n ? '' : ' (belum ada data)'), dis: !n };
     }), S.level);
-    const units = Object.keys(DATA.levels[S.level] || {}).sort();
+    const lv = DATA.levels[S.level] || {};
+    const units = Object.keys(lv).sort((a, b) => (lv[b].merged ? 1 : 0) - (lv[a].merged ? 1 : 0) || a.localeCompare(b));
     if (!units.includes(S.unit)) S.unit = units[0];
     fillSelect($('fUnit'), units.map((u) => ({ v: u, t: u })), S.unit);
+    const split = hasSplit();
+    if (!split) S.jenis = 'TOTAL';
+    $('fJenis').querySelectorAll('button').forEach((b) => {
+      b.disabled = b.dataset.v !== 'TOTAL' && !split;
+      b.title = b.disabled ? 'Rincian pascabayar/prabayar tidak tersedia untuk unit ini' : '';
+    });
     const months = allMonths();
     const years = [...new Set(months.map((m) => m.slice(0, 4)))];
     if (!years.includes(S.year)) S.year = years[years.length - 1];
@@ -203,15 +242,18 @@
       { m: 'rp', lbl: 'Pendapatan', v: (a) => a[F.rp] / 1e9, show: (v) => 'Rp ' + fmt(v, 2), unit: 'M', ytd: (a) => 'Kumulatif Rp ' + fmt(a[F.rp] / 1e9, 2) + ' M' },
       { m: 'rpkwhavg', lbl: 'Harga jual rata-rata', v: (a) => (a[F.kwh] ? a[F.rp] / a[F.kwh] : 0), show: (v) => fmt(v, 2), unit: 'Rp/kWh', ytd: (a) => 'Kumulatif ' + fmt(a[F.kwh] ? a[F.rp] / a[F.kwh] : 0, 2) + ' Rp/kWh' },
     ];
+    const ly = `${+S.ym.slice(0, 4) - 1}${S.ym.slice(4)}`;
+    const lyA = months.includes(ly) ? agg(ly, S.jenis, S.gol) : null;
+    const dl = (v, p, label) => {
+      const ch = p ? (v - p) / Math.abs(p) * 100 : 0;
+      const cls = Math.abs(ch) < 0.05 ? 'flat' : ch > 0 ? 'up' : 'down';
+      const arrow = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '■';
+      return `<span class="delta ${cls}">${arrow} ${fmt(Math.abs(ch), 1)}% <span>vs ${label}</span></span>`;
+    };
     $('kpis').innerHTML = defs.map((d, i) => {
       const v = d.v(cur);
-      let delta = '<span class="delta flat">— <span>tidak ada bulan sebelumnya</span></span>';
-      if (pv) {
-        const p = d.v(pv), ch = p ? (v - p) / Math.abs(p) * 100 : 0;
-        const cls = Math.abs(ch) < 0.05 ? 'flat' : ch > 0 ? 'up' : 'down';
-        const arrow = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '■';
-        delta = `<span class="delta ${cls}">${arrow} ${fmt(Math.abs(ch), 1)}% <span>vs ${ymLabel(prev, true)}</span></span>`;
-      }
+      let delta = pv ? dl(v, d.v(pv), ymLabel(prev, true)) : '<span class="delta flat">— <span>tidak ada bulan sebelumnya</span></span>';
+      if (lyA) delta += dl(v, d.v(lyA), ymLabel(ly, true) + ' ' + ly.slice(0, 4));
       return `<div class="kpi"><div class="lbl">${d.lbl}</div>` +
         `<div class="val">${d.show(v)}<small>${d.unit}</small></div>${delta}` +
         `<div class="ytd">${d.ytd ? d.ytd(yt) : '&nbsp;'}</div>` +
@@ -243,12 +285,13 @@
   function renderTrend() {
     const ym = yearMonths(), m = S.tMetric, sel = ym.indexOf(S.ym);
     const c = chart('chTrend');
-    const parts = S.jenis === 'TOTAL' ? ['NORMAL', 'LPB'] : [S.jenis];
+    const split = hasSplit();
+    const parts = S.jenis === 'TOTAL' ? (split ? ['NORMAL', 'LPB'] : ['TOTAL']) : [S.jenis];
     const color = { NORMAL: css('--s1'), LPB: css('--s2'), TOTAL: css('--s3') };
     const surface = css('--surface');
     let series;
     if (m === 'rpkwhavg') {
-      const lines = S.jenis === 'TOTAL' ? ['NORMAL', 'LPB', 'TOTAL'] : [S.jenis];
+      const lines = S.jenis === 'TOTAL' ? (split ? ['NORMAL', 'LPB', 'TOTAL'] : ['TOTAL']) : [S.jenis];
       series = lines.map((j) => ({
         name: JENIS_NAME[j], type: 'line', data: ym.map((x) => val(agg(x, j, S.gol), m)),
         symbol: 'circle', symbolSize: 8, lineStyle: { width: 2, color: color[j] },
@@ -356,6 +399,16 @@
 
   // ---------- pasca vs pra ----------
   function renderMix() {
+    if (!hasSplit()) {
+      chart('chMix').setOption(Object.assign(base(), {
+        title: {
+          text: 'Rincian pascabayar/prabayar\ntidak tersedia untuk unit ini', left: 'center', top: 'middle',
+          textStyle: { color: css('--muted'), fontSize: 13, fontWeight: 400, lineHeight: 20 },
+        },
+        series: [],
+      }), true);
+      return;
+    }
     const n = agg(S.ym, 'NORMAL', S.gol), l = agg(S.ym, 'LPB', S.gol);
     const ms = ['c', 'va', 'kwh', 'rp'];
     const names = { c: 'Pelanggan', va: 'Daya', kwh: 'kWh', rp: 'Rupiah' };
@@ -379,6 +432,46 @@
       }),
       series: [mk('NORMAL', n, l, css('--s1'), [4, 0, 0, 4]), mk('LPB', l, n, css('--s2'), [0, 4, 4, 0])],
     }), true);
+  }
+
+  // ---------- perbandingan antar unit ----------
+  function renderCmp() {
+    const names = realUnits(S.level);
+    $('cardCmp').hidden = names.length < 2;
+    if (names.length < 2) return;
+    const m = S.cMetric, lv = DATA.levels[S.level];
+    const items = names.map((n) => {
+      const u = lv[n];
+      const j = S.jenis !== 'TOTAL' && !hasSplit(u) ? null : S.jenis;
+      return { n, v: j && u.months[S.ym] ? val(agg(S.ym, j, S.gol, u), m) : 0 };
+    }).sort((a, b) => a.v - b.v);
+    const total = m === 'rpkwhavg' ? 0 : items.reduce((s, x) => s + x.v, 0);
+    $('cmpHint').textContent = `${METRIC[m].label} · ${ymLabel(S.ym)} · ${JENIS_NAME[S.jenis]}${S.gol ? ' · Golongan ' + GOL[S.gol].name : ''} — klik untuk membuka unit`;
+    const c = chart('chCmp');
+    $('chCmp').style.height = Math.max(220, items.length * 40 + 30) + 'px';
+    c.resize();
+    const accent = css('--s1');
+    c.setOption(Object.assign(base(), {
+      grid: { left: 4, right: 120, top: 4, bottom: 4, containLabel: true },
+      xAxis: { type: 'value', show: false },
+      yAxis: { type: 'category', data: items.map((x) => x.n), axisLine: axisLine(), axisTick: { show: false }, axisLabel: axisLabel({ color: css('--ink-2'), fontSize: 12 }) },
+      tooltip: Object.assign(base().tooltip, {
+        trigger: 'item',
+        formatter: (p) => `<div style="font-weight:650;margin-bottom:4px">${esc(p.name)}</div>` +
+          ttRow(p.color, METRIC[m].label, fmtMetric(m, p.value)) + (total ? ttRow('', 'Porsi', fmt(p.value / total * 100, 1) + '%') : ''),
+      }),
+      series: [{
+        type: 'bar', barMaxWidth: 22, cursor: 'pointer',
+        data: items.map((x) => ({ value: x.v, name: x.n, itemStyle: { color: accent, opacity: lv[S.unit].merged || S.unit === x.n ? 1 : 0.4, borderRadius: [0, 4, 4, 0] } })),
+        label: {
+          show: true, position: 'right', fontSize: 11.5,
+          formatter: (p) => m === 'rpkwhavg' ? `{b|${fmt(p.value, 2)}}` : `{b|${compact(p.value)}}  {m|${fmt(total ? p.value / total * 100 : 0, 1)}%}`,
+          rich: { b: { fontWeight: 600, color: css('--ink') }, m: { color: css('--muted') } },
+        },
+      }],
+    }), true);
+    c.off('click');
+    c.on('click', (p) => { S.unit = p.name; render(); });
   }
 
   // ---------- top tarif ----------
@@ -488,7 +581,7 @@
     syncFilters();
     const u = unitData();
     if (!u || !S.ym) { $('kpis').innerHTML = '<div class="empty">Belum ada data</div>'; return; }
-    renderMeta(); renderKpis(); renderTrend(); renderGol(); renderMix(); renderTop(); renderTable();
+    renderMeta(); renderKpis(); renderTrend(); renderCmp(); renderGol(); renderMix(); renderTop(); renderTable();
   }
 
   function bind() {
@@ -497,7 +590,7 @@
     $('fYear').onchange = (e) => { S.year = e.target.value; S.ym = null; render(); };
     $('fMonth').onchange = (e) => { S.ym = e.target.value; render(); };
     bindSeg('fJenis', 'jenis'); bindSeg('tMetric', 'tMetric'); bindSeg('gMetric', 'gMetric');
-    bindSeg('gPeriod', 'gPeriod'); bindSeg('topMetric', 'topMetric');
+    bindSeg('gPeriod', 'gPeriod'); bindSeg('topMetric', 'topMetric'); bindSeg('cMetric', 'cMetric');
     $('q').oninput = (e) => { S.q = e.target.value; renderTable(); };
     $('hideZero').onchange = (e) => { S.hideZero = e.target.checked; renderTable(); };
     $('csvBtn').onclick = exportCsv;
@@ -533,12 +626,13 @@
       DATA = d;
       F = { names: d.fields };
       d.fields.forEach((f, i) => (F[f] = i));
+      buildMerged();
       readHash();
       if (!Object.keys(DATA.levels[S.level] || {}).length) S.level = Object.keys(DATA.levels).find((l) => Object.keys(DATA.levels[l]).length) || 'UP';
       bind();
       render();
       const gen = new Date(d.generated_at);
-      $('foot').innerHTML = `Sumber: Laporan TUL III-09 (Lampiran 1) · Total = Pascabayar + Prabayar · Data diperbarui ${gen.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}`;
+      $('foot').innerHTML = `Sumber: Laporan TUL III-09 (Lampiran 1) · Total = Pascabayar + Prabayar (bila rincian tersedia) · Data diperbarui ${gen.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}`;
       $('loading').classList.add('hide');
     })
     .catch((err) => {

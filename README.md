@@ -13,7 +13,14 @@ docs/                      Website (root GitHub Pages)
   index.html, assets/, data/data.json
 ```
 
-Yang dibaca: file `Laporan_III_09_NORMAL_LAPORAN1_YYYYMM*.xlsx` (pascabayar) dan
+Format file yang dikenali:
+- **UP**: `Laporan_III_09_{NORMAL|LPB}_LAPORAN1_YYYYMM*.xlsx`
+- **UPI (ditampilkan sebagai ULP)**: `Laporan_III_09_TOTAL_LAPORAN1_YYYYMM_<kode>.xlsx` — satu file per ULP.
+  Nama ULP dibaca otomatis dari isi file; bisa juga diatur manual di `unit_names.json`
+  (contoh: `{"32910": "ULP MANAKARRA"}`). Script mengecek jumlah semua ULP = UP3 setiap bulan.
+- **KABUPATEN**: `TUL_III_09_KAB_<NAMA>_YYYYMM_TOTAL_YYYYMMDD.xlsx`
+
+Detail untuk UP: file `Laporan_III_09_NORMAL_LAPORAN1_YYYYMM*.xlsx` (pascabayar) dan
 `Laporan_III_09_LPB_LAPORAN1_YYYYMM*.xlsx` (prabayar). **Total = Normal + LPB** (dihitung otomatis,
 sudah dicek sama persis dengan file TOTAL). Jika ada beberapa file untuk bulan yang sama
 (mis. berakhiran `_04_Nov_2026_22-33-36`), yang dipakai adalah yang **terbaru**.
