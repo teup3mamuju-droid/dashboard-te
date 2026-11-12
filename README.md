@@ -26,7 +26,25 @@ sudah dicek sama persis dengan file TOTAL). Jika ada beberapa file untuk bulan y
 (mis. berakhiran `_04_Nov_2026_22-33-36`), yang dipakai adalah yang **terbaru**.
 Untuk KABUPATEN/UPI: satu subfolder per unit/kabupaten bila nama unit di sel B3 sama.
 
-## Update bulanan
+## Update bulanan — lewat tombol di website (disarankan)
+1. Buka **https://teup3mamuju-droid.github.io/dashboard-te/?admin** sekali saja di browser Anda.
+   Tombol **Perbarui data** akan muncul (dan tetap muncul di browser itu). Pengunjung biasa tidak melihatnya.
+2. Simpan file Excel baru ke folder `Transaksi Energi/309/...` seperti biasa.
+3. Klik **Perbarui data → Pilih folder…** → pilih folder `309`.
+   Browser membaca & memvalidasi semua file (logika sama dengan `build_data.py`, file tidak di-upload).
+4. Periksa ringkasan & peringatan; dashboard menampilkan **pratinjau**.
+5. Klik **Publikasikan**. Pertama kali diminta **token GitHub**:
+   github.com → Settings → Developer settings → *Fine-grained tokens* → Generate new token →
+   Repository access: *Only select repositories* → `dashboard-te` → Permissions: *Contents: Read and write*.
+   Token disimpan hanya di browser tersebut.
+6. Website ter-update untuk semua orang dalam ±1–2 menit.
+
+Untuk menyembunyikan tombol lagi: buka `...?admin=0`.
+
+> Jika setelah itu Anda ingin memakai cara script di bawah, jalankan `git pull` dulu
+> karena data terbaru sudah dikirim langsung ke GitHub oleh tombol tadi.
+
+## Update bulanan — lewat script (alternatif)
 1. Simpan file Excel baru ke `Transaksi Energi/309/UP/2026/` (atau folder level lain).
 2. Jalankan:
    ```

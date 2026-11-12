@@ -620,19 +620,202 @@
     window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => Object.values(charts).forEach((c) => c.resize()), 120); });
   }
 
+  // ---------- muat data ----------
+  let ORIG = null;     // data.json yang sedang tayang (bersih, tanpa unit gabungan)
+  let PENDING = null;  // data baru hasil "Perbarui data" yang belum dipublikasikan
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+
+  function setData(d) {
+    DATA = clone(d);
+    F = { names: DATA.fields };
+    DATA.fields.forEach((f, i) => (F[f] = i));
+    buildMerged();
+    if (!Object.keys(DATA.levels[S.level] || {}).length) S.level = Object.keys(DATA.levels).find((l) => Object.keys(DATA.levels[l]).length) || 'UP';
+    const gen = new Date(DATA.generated_at);
+    $('foot').innerHTML = `Sumber: Laporan TUL III-09 (Lampiran 1) · Total = Pascabayar + Prabayar (bila rincian tersedia) · Data diperbarui ${gen.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}`;
+  }
+
+  // ---------- Perbarui data (admin) ----------
+  const LS = {
+    get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* abaikan */ } },
+    del: (k) => { try { localStorage.removeItem(k); } catch (e) { /* abaikan */ } },
+  };
+  const REPO = location.hostname.endsWith('.github.io')
+    ? `${location.hostname.split('.')[0]}/${location.pathname.split('/')[1]}`
+    : 'teup3mamuju-droid/dashboard-te';
+  const DATA_PATH = 'docs/data/data.json';
+
+  function loadScript(src) {
+    return new Promise((ok, fail) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = ok; s.onerror = () => fail(new Error('gagal memuat ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  function msg(kind, html, list) {
+    return `<div class="msg ${kind}">${html}${list && list.length ? '<ul>' + list.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>' : ''}</div>`;
+  }
+  function unitSummary(d) {
+    const out = {};
+    for (const [l, lv] of Object.entries(d.levels)) for (const [n, u] of Object.entries(lv)) out[`${l}|${n}`] = Object.keys(u.months).sort();
+    return out;
+  }
+
+  async function readFolder(fileList) {
+    const files = [...fileList].filter((f) => /\.xlsx$/i.test(f.name) && !f.name.startsWith('~$') &&
+      TulBuilder.levelOf(f.webkitRelativePath || f.name));
+    if (!files.length) {
+      $('updProg').textContent = '';
+      $('updSummary').innerHTML = msg('err', 'Tidak ada file Excel di subfolder <b>UP / UPI / KABUPATEN</b>. Pastikan yang dipilih folder <code>309</code>.');
+      $('stepCheck').hidden = false; $('stepPub').hidden = true;
+      return;
+    }
+    if (!window.XLSX) { $('updProg').textContent = 'Menyiapkan pembaca Excel…'; await loadScript('assets/xlsx.full.min.js'); }
+    const parsed = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      $('updProg').textContent = `Membaca file ${i + 1} dari ${files.length}…`;
+      try {
+        parsed.push({ path: f.webkitRelativePath || f.name, name: f.name, lastModified: f.lastModified, rows: TulBuilder.sheetRows(XLSX, new Uint8Array(await f.arrayBuffer())) });
+      } catch (e) {
+        parsed.push({ path: f.webkitRelativePath || f.name, name: f.name, lastModified: f.lastModified, rows: [] });
+      }
+      if (i % 5 === 4) await new Promise((r) => setTimeout(r));
+    }
+    const names = {};
+    for (const lv of Object.values(ORIG.levels)) for (const [n, u] of Object.entries(lv)) if (u.code) names[u.code] = n;
+    let res;
+    try { res = TulBuilder.build(parsed, names); } catch (e) {
+      $('updProg').textContent = '';
+      $('updSummary').innerHTML = msg('err', 'Gagal membaca data: ' + esc(e.message));
+      $('stepCheck').hidden = false; $('stepPub').hidden = true;
+      return;
+    }
+    $('updProg').textContent = `${files.length} file dibaca.`;
+    showSummary(res);
+  }
+
+  function showSummary(res) {
+    const before = unitSummary(ORIG), after = unitSummary(res.data);
+    const lost = [];
+    for (const [k, ms] of Object.entries(before)) {
+      const [l, n] = k.split('|');
+      if (!after[k]) lost.push(`${LEVEL_NAME[l] || l} ${n}: unit hilang dari data baru`);
+      else { const miss = ms.filter((m) => !after[k].includes(m)); if (miss.length) lost.push(`${n}: bulan ${miss.join(', ')} hilang`); }
+    }
+    let h = '<table class="sum-table"><thead><tr><th>Level</th><th>Unit</th><th>Periode</th><th>Bulan</th><th>Perubahan</th></tr></thead><tbody>';
+    for (const x of res.log) {
+      const k = `${x.level}|${x.unit}`, b = before[k] || [];
+      const added = (after[k] || []).filter((m) => !b.includes(m));
+      const ch = !b.length ? '<b>baru</b>' : added.length ? `+${added.map((m) => ymLabel(m, true) + ' ' + m.slice(0, 4)).join(', ')}` : '—';
+      h += `<tr><td>${LEVEL_NAME[x.level] || x.level}</td><td>${esc(x.unit)}</td><td>${ymLabel(x.from, true)} ${x.from.slice(0, 4)} – ${ymLabel(x.to, true)} ${x.to.slice(0, 4)}</td><td>${x.months}</td><td>${ch}</td></tr>`;
+    }
+    h += '</tbody></table>';
+    if (!res.log.length) {
+      $('updSummary').innerHTML = msg('err', 'Tidak ada data yang bisa dibaca dari folder ini.');
+      $('stepCheck').hidden = false; $('stepPub').hidden = true;
+      return;
+    }
+    h += res.warns.length ? msg('warn', `<b>${res.warns.length} peringatan validasi</b> — periksa sebelum publikasi:`, res.warns)
+      : msg('ok', '✓ Validasi: semua total cocok dengan baris JUMLAH' + (Object.keys(res.data.levels.UPI || {}).length ? ', dan jumlah ULP = UP3.' : '.'));
+    if (lost.length) h += msg('warn', '<b>Data lama yang tidak ada di folder ini</b> (akan hilang dari website jika dipublikasikan):', lost);
+    if (res.unknown.length) h += msg('warn', `${res.unknown.length} file tidak dikenali (dilewati):`, res.unknown);
+    if (res.unnamed.length) h += msg('warn', 'Unit tanpa nama: ' + esc(res.unnamed.join(', ')));
+    $('updSummary').innerHTML = h;
+    PENDING = res.data;
+    PENDING._lost = lost.length;
+    setData(PENDING); render();
+    $('previewBar').hidden = false;
+    $('stepCheck').hidden = false; $('stepPub').hidden = false;
+    $('updResult').innerHTML = '';
+    syncToken();
+  }
+
+  function syncToken() {
+    const has = !!LS.get('ghToken');
+    $('tokBox').hidden = has; $('tokSaved').hidden = !has;
+  }
+
+  function b64utf8(str) {
+    const bytes = new TextEncoder().encode(str);
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+
+  async function publish() {
+    if (!PENDING) return;
+    const token = LS.get('ghToken') || $('updTok').value.trim();
+    if (!token) { $('updResult').innerHTML = msg('err', 'Masukkan token GitHub terlebih dahulu.'); return; }
+    if (PENDING._lost && !confirm('Sebagian data lama tidak ada di folder yang dipilih dan akan hilang dari website. Tetap publikasikan?')) return;
+    const btn = $('updPub');
+    btn.disabled = true; btn.textContent = 'Mempublikasikan…';
+    const api = `https://api.github.com/repos/${REPO}/contents/${DATA_PATH}`;
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    try {
+      const cur = await fetch(`${api}?ref=main&t=${Date.now()}`, { headers, cache: 'no-store' });
+      if (!cur.ok) throw Object.assign(new Error('read'), { status: cur.status });
+      const { sha } = await cur.json();
+      const clean = Object.assign({}, PENDING); delete clean._lost;
+      const ms = [...new Set(Object.values(clean.levels).flatMap((lv) => Object.values(lv).flatMap((u) => Object.keys(u.months))))].sort();
+      const body = {
+        message: `Update data dashboard s.d. ${ms.length ? ymLabel(ms[ms.length - 1]) : ''} (via tombol Perbarui data)`,
+        content: b64utf8(JSON.stringify(clean)), sha, branch: 'main',
+      };
+      const r = await fetch(api, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, headers), body: JSON.stringify(body) });
+      if (!r.ok) throw Object.assign(new Error('write'), { status: r.status });
+      const out = await r.json();
+      LS.set('ghToken', token); $('updTok').value = ''; syncToken();
+      ORIG = clean; PENDING = null;
+      $('previewBar').hidden = true;
+      $('updResult').innerHTML = msg('ok', `✓ Berhasil dipublikasikan. Website untuk semua orang akan ter-update dalam ±1–2 menit (tekan Ctrl+F5 bila belum berubah).` +
+        (out.commit && out.commit.html_url ? ` <a href="${esc(out.commit.html_url)}" target="_blank" rel="noopener">Lihat perubahan</a>` : ''));
+      $('stepPub').querySelector('h3').textContent = 'Publikasikan ke website — selesai';
+    } catch (e) {
+      const st = e.status;
+      let why = 'Gagal terhubung ke GitHub. Periksa koneksi internet.';
+      if (st === 401) why = 'Token tidak valid atau sudah kedaluwarsa. Buat token baru.';
+      else if (st === 403 || st === 404) why = `Token tidak punya izin menulis ke repo <code>${esc(REPO)}</code>. Pastikan repo ini dipilih dan izin <i>Contents: Read and write</i> aktif.`;
+      else if (st === 409 || st === 422) why = 'Data di GitHub berubah saat proses berjalan. Coba klik Publikasikan sekali lagi.';
+      else if (st) why = `GitHub menolak permintaan (kode ${st}).`;
+      if (st === 401 || st === 403 || st === 404) { LS.del('ghToken'); syncToken(); }
+      $('updResult').innerHTML = msg('err', why);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Publikasikan';
+    }
+  }
+
+  window.TulAdmin = { readFolder }; // untuk pengujian otomatis
+
+  function bindUpdater() {
+    const q = new URLSearchParams(location.search);
+    if (q.has('admin')) { if (q.get('admin') === '0') LS.del('tulAdmin'); else LS.set('tulAdmin', '1'); }
+    $('updBtn').hidden = LS.get('tulAdmin') !== '1';
+    $('repoName').textContent = REPO;
+    const dlg = $('upd');
+    $('updBtn').onclick = () => { syncToken(); dlg.showModal(); };
+    $('pvOpen').onclick = () => { syncToken(); dlg.showModal(); };
+    $('updClose').onclick = () => dlg.close();
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    $('updDir').onchange = (e) => { readFolder(e.target.files).catch((err) => { $('updSummary').innerHTML = msg('err', esc(err.message)); $('stepCheck').hidden = false; }); e.target.value = ''; };
+    $('updPub').onclick = publish;
+    $('tokClear').onclick = () => { LS.del('ghToken'); syncToken(); };
+    $('pvCancel').onclick = () => {
+      PENDING = null; setData(ORIG); render();
+      $('previewBar').hidden = true; $('stepCheck').hidden = true; $('stepPub').hidden = true; $('updProg').textContent = '';
+    };
+  }
+
   fetch('data/data.json', { cache: 'no-cache' })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((d) => {
-      DATA = d;
-      F = { names: d.fields };
-      d.fields.forEach((f, i) => (F[f] = i));
-      buildMerged();
+      ORIG = d;
+      setData(d);
       readHash();
-      if (!Object.keys(DATA.levels[S.level] || {}).length) S.level = Object.keys(DATA.levels).find((l) => Object.keys(DATA.levels[l]).length) || 'UP';
       bind();
+      bindUpdater();
       render();
-      const gen = new Date(d.generated_at);
-      $('foot').innerHTML = `Sumber: Laporan TUL III-09 (Lampiran 1) · Total = Pascabayar + Prabayar (bila rincian tersedia) · Data diperbarui ${gen.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}`;
       $('loading').classList.add('hide');
     })
     .catch((err) => {

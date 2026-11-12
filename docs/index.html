@@ -21,9 +21,15 @@
           <p class="sub" id="subtitle">Laporan TUL III-09</p>
         </div>
       </div>
-      <button class="icon-btn" id="themeBtn" type="button" aria-label="Ganti tema terang/gelap" title="Ganti tema">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
-      </button>
+      <div class="top-actions">
+        <button class="btn-upd" id="updBtn" type="button" hidden title="Baca ulang file Excel & publikasikan">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          <span>Perbarui data</span>
+        </button>
+        <button class="icon-btn" id="themeBtn" type="button" aria-label="Ganti tema terang/gelap" title="Ganti tema">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+        </button>
+      </div>
     </div>
     <div class="wrap filters" role="group" aria-label="Filter">
       <label class="field"><span>Level</span><select id="fLevel"></select></label>
@@ -149,7 +155,61 @@
 
   <div class="loading" id="loading">Memuat data…</div>
 
+  <div class="preview-bar" id="previewBar" hidden>
+    <span><b>Mode pratinjau</b> — data baru belum dipublikasikan.</span>
+    <button type="button" class="btn" id="pvOpen">Lanjutkan</button>
+    <button type="button" class="btn ghost" id="pvCancel">Batalkan</button>
+  </div>
+
+  <dialog id="upd" aria-labelledby="updTitle">
+    <div class="dlg">
+      <div class="dlg-head">
+        <h2 id="updTitle">Perbarui data dashboard</h2>
+        <button type="button" class="x" id="updClose" aria-label="Tutup">×</button>
+      </div>
+
+      <section class="step">
+        <div class="step-n">1</div>
+        <div class="step-b">
+          <h3>Pilih folder <code>309</code></h3>
+          <p class="hint">Folder yang berisi subfolder <b>UP</b>, <b>UPI</b>, dan <b>KABUPATEN</b>
+            (mis. <code>Documents\Dashboard TE\Transaksi Energi\309</code>). File dibaca di komputer Anda, tidak di-upload.</p>
+          <label class="btn file-btn">Pilih folder…<input type="file" id="updDir" webkitdirectory directory multiple hidden></label>
+          <span class="hint" id="updProg"></span>
+        </div>
+      </section>
+
+      <section class="step" id="stepCheck" hidden>
+        <div class="step-n">2</div>
+        <div class="step-b">
+          <h3>Periksa hasil</h3>
+          <div id="updSummary"></div>
+          <p class="hint">Dashboard di belakang jendela ini sudah menampilkan <b>pratinjau</b> data baru —
+            tutup jendela untuk memeriksanya, lalu klik <b>Lanjutkan</b>.</p>
+        </div>
+      </section>
+
+      <section class="step" id="stepPub" hidden>
+        <div class="step-n">3</div>
+        <div class="step-b">
+          <h3>Publikasikan ke website</h3>
+          <div id="tokBox">
+            <p class="hint">Butuh <b>token GitHub</b> (cukup sekali, disimpan hanya di browser ini).
+              <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Buat token</a>
+              → Repository access: <i>Only select repositories</i> → <code id="repoName"></code>
+              → Permissions: <i>Contents: Read and write</i>.</p>
+            <input type="password" id="updTok" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+          </div>
+          <p class="hint" id="tokSaved" hidden>Token tersimpan di browser ini · <button type="button" class="linkbtn" id="tokClear">hapus token</button></p>
+          <button type="button" class="btn" id="updPub">Publikasikan</button>
+          <div id="updResult"></div>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
   <script src="assets/echarts.min.js"></script><!-- Apache ECharts 5.5.1 (Apache-2.0) -->
+  <script src="assets/builder.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

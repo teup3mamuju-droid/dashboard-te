@@ -248,6 +248,10 @@ def main() -> int:
             for mk, mon in u["months"].items():
                 if "NORMAL" in mon and "LPB" in mon and "TOTAL" in mon:
                     del mon["TOTAL"], mon["status"]["TOTAL"], mon["source"]["TOTAL"]
+            for mk, mon in u["months"].items():
+                if "TOTAL" not in mon and ("NORMAL" in mon) != ("LPB" in mon):
+                    ada, kurang = ("NORMAL", "LPB") if "NORMAL" in mon else ("LPB", "NORMAL")
+                    all_warns.append(f"{uname} {mk}: hanya ada file {ada} — file {kurang} belum ada, total bulan ini tidak lengkap")
             months = sorted(u["months"])
             print(f"[{level:9}] {uname:22} {len(months):2} bulan ({months[0]} s.d. {months[-1]})"
                   f"  jenis: {sorted({j for m in u['months'].values() for j in m if j in ('NORMAL','LPB','TOTAL')})}")
