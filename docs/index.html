@@ -21,6 +21,10 @@
           <p class="sub" id="subtitle">Laporan TUL III-09</p>
         </div>
       </div>
+      <nav class="sections" id="sections" aria-label="Menu utama">
+        <button type="button" data-v="transaksi" aria-pressed="true">Transaksi Energi</button>
+        <button type="button" data-v="susut" aria-pressed="false">Pengendalian Susut</button>
+      </nav>
       <div class="top-actions">
         <button class="btn-upd" id="updBtn" type="button" hidden title="Baca ulang file Excel & publikasikan">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
@@ -31,7 +35,7 @@
         </button>
       </div>
     </div>
-    <div class="wrap filters" role="group" aria-label="Filter">
+    <div class="wrap filters" id="dashFilters" role="group" aria-label="Filter">
       <label class="field"><span>Level</span><select id="fLevel"></select></label>
       <label class="field"><span>Unit</span><select id="fUnit"></select></label>
       <label class="field"><span>Tahun</span><select id="fYear"></select></label>
@@ -153,6 +157,19 @@
     <footer class="foot" id="foot"></footer>
   </main>
 
+  <main class="wrap susut" id="susutApp" aria-label="Laporan Susut">
+    <div class="s-head">
+      <div class="crumb" id="sCrumb"></div>
+      <select id="sRep" aria-label="Pilih laporan" hidden></select>
+    </div>
+    <div class="s-tabs" id="sTabs" role="tablist" aria-label="Sheet laporan"></div>
+    <div class="s-meta" id="sMeta"></div>
+    <div class="s-msg" id="sMsg" hidden></div>
+    <div class="s-wrap" id="sWrap" tabindex="0"><table class="s-tbl" id="sTbl"></table></div>
+    <footer class="foot" id="sFoot"></footer>
+    <style id="sStyle"></style>
+  </main>
+
   <div class="loading" id="loading">Memuat data…</div>
 
   <div class="preview-bar" id="previewBar" hidden>
@@ -211,5 +228,6 @@
   <script src="assets/echarts.min.js"></script><!-- Apache ECharts 5.5.1 (Apache-2.0) -->
   <script src="assets/builder.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/susut.js"></script>
 </body>
 </html>

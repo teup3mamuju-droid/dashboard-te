@@ -5,6 +5,7 @@ Dashboard web interaktif dari file Excel Laporan III-09 (Lampiran 1), di-host gr
 ## Struktur
 ```
 build_data.py              Excel -> docs/data/data.json
+build_susut.py             Pengendalian Susut/Laporan Susut/*.xlsx -> docs/data/susut.json
 Transaksi Energi/309/      File Excel sumber (TIDAK di-upload ke GitHub)
   UP/<tahun>/...           level UP3
   KABUPATEN/<tahun>/...    level Kabupaten (otomatis muncul di dashboard bila ada file)
@@ -80,3 +81,12 @@ lalu buka http://localhost:8000
 - Tren bulanan (klik batang untuk pilih bulan), komposisi golongan (klik untuk menyaring semua grafik),
   porsi pascabayar vs prabayar, 10 tarif terbesar, tabel detail (urut, cari, buka/tutup golongan, unduh CSV).
 - Mode terang/gelap, tampilan responsif untuk HP.
+
+## Pengendalian Susut › Laporan Susut
+Menu **Pengendalian Susut** di website menampilkan file Excel di folder
+`Pengendalian Susut/Laporan Susut/` (satu file = satu laporan, satu sheet = satu tab; tampilan mengikuti Excel:
+sel gabungan, warna, huruf tebal, format angka). Update:
+1. Ganti/simpan file Excel di `Pengendalian Susut/Laporan Susut/`.
+2. `python build_susut.py`
+3. `git pull`, lalu `git add docs/data/susut.json`, `git commit`, `git push`.
+(Tombol "Perbarui data" di website baru untuk data Transaksi Energi.)
